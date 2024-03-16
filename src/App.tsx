@@ -38,10 +38,27 @@ const llm = new ChatOpenAI({
 
 const template =
   "Given a question, convert it to a standalone question. question: {question} standalone question:";
+const answerTemplate = `You are a helpful and enthusiastic support bot who can answer any question
+  about Scrimba based on the context provided. Try to find the answer in the context. If you can't find the answer, say "I'm sorry, I don't know the answer to that question. and direct questioner to email help@scrimba,com".
+  Don't try to make up and answer. Always speak as if you are chatting to a friend.
+  context: {context},
+  question: {question},
+  answer:
+`;
 
+const answerPrompt = PromptTemplate.fromTemplate(answerTemplate);
 const prompt = PromptTemplate.fromTemplate(template);
 
-const chain = prompt.pipe(llm).pipe(new StringOutputParser()).pipe(retriever);
+const combineDocs = (docs: any[]) => {
+  return docs.map((doc) => doc.pageContent).join("\n\n");
+};
+
+const chain = prompt
+  .pipe(llm)
+  .pipe(new StringOutputParser())
+  .pipe(retriever)
+  .pipe(combineDocs)
+  .pipe(answerPrompt);
 
 function App() {
   const [messages, setMessages] = useState<
