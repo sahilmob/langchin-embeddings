@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { readFileSync } from "fs";
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { createClient } from "@supabase/supabase-js";
-import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
 import { OpenAIEmbeddings } from "@langchain/openai";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
 
 try {
   const text = readFileSync("server/scrimba.txt", "utf8");

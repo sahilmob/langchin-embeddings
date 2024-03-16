@@ -6,13 +6,32 @@ import TextField from "@mui/material/TextField";
 import Grid from "@mui/material/Unstable_Grid2";
 import { PromptTemplate } from "langchain/prompts";
 import { useRef, useState, Fragment } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { OpenAIEmbeddings } from "@langchain/openai";
 import ListItemText from "@mui/material/ListItemText";
 import { ChatOpenAI } from "langchain/chat_models/openai";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import { StringOutputParser } from "langchain/schema/output_parser";
+import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
 
-const openAIApiKey = process.env.REACT_APP_openAIApiKey;
+const openAIApiKey = process.env.REACT_APP_OPENAI_API_KEY;
+const embddings = new OpenAIEmbeddings({
+  openAIApiKey,
+});
+const sbApiKey = process.env.REACT_APP_SUPABASE_API_KEY;
+const sbUrl = process.env.REACT_APP_SUPABASE_URL;
+const client = createClient(sbUrl!, sbApiKey!);
+
+const vectorStore = new SupabaseVectorStore(embddings, {
+  client,
+  tableName: "documents",
+  queryName: "match_documents",
+});
+
+const retriever = vectorStore.asRetriever();
+
 const llm = new ChatOpenAI({
   openAIApiKey,
 });
@@ -22,7 +41,7 @@ const template =
 
 const prompt = PromptTemplate.fromTemplate(template);
 
-const chain = prompt.pipe(llm);
+const chain = prompt.pipe(llm).pipe(new StringOutputParser()).pipe(retriever);
 
 function App() {
   const [messages, setMessages] = useState<
