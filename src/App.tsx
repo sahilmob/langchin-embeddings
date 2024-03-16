@@ -15,6 +15,10 @@ import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { StringOutputParser } from "langchain/schema/output_parser";
 import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
+import {
+  RunnableSequence,
+  RunnablePassthrough,
+} from "langchain/schema/runnable";
 
 const openAIApiKey = process.env.REACT_APP_OPENAI_API_KEY;
 const embddings = new OpenAIEmbeddings({
@@ -36,29 +40,42 @@ const llm = new ChatOpenAI({
   openAIApiKey,
 });
 
-const template =
+const standaloneQuestionTemplate =
   "Given a question, convert it to a standalone question. question: {question} standalone question:";
-const answerTemplate = `You are a helpful and enthusiastic support bot who can answer any question
-  about Scrimba based on the context provided. Try to find the answer in the context. If you can't find the answer, say "I'm sorry, I don't know the answer to that question. and direct questioner to email help@scrimba,com".
-  Don't try to make up and answer. Always speak as if you are chatting to a friend.
-  context: {context},
-  question: {question},
-  answer:
-`;
+const standaloneQuestionPrompt = PromptTemplate.fromTemplate(
+  standaloneQuestionTemplate
+);
 
+const answerTemplate = `You are a helpful and enthusiastic support bot who can answer a given question about Scrimba based on the context provided. Try to find the answer in the context. If you really don't know the answer, say "I'm sorry, I don't know the answer to that." And direct the questioner to email help@scrimba.com. Don't try to make up an answer. Always speak as if you were chatting to a friend.
+context: {context}
+question: {question}
+answer: `;
 const answerPrompt = PromptTemplate.fromTemplate(answerTemplate);
-const prompt = PromptTemplate.fromTemplate(template);
 
 const combineDocs = (docs: any[]) => {
   return docs.map((doc) => doc.pageContent).join("\n\n");
 };
 
-const chain = prompt
+const standaloneQuestionChain = standaloneQuestionPrompt
   .pipe(llm)
-  .pipe(new StringOutputParser())
-  .pipe(retriever)
-  .pipe(combineDocs)
-  .pipe(answerPrompt);
+  .pipe(new StringOutputParser());
+const retrieverChain = RunnableSequence.from([
+  (prevResult) => prevResult.standalone_question,
+  retriever,
+  combineDocs,
+]);
+const answerChain = answerPrompt.pipe(llm).pipe(new StringOutputParser());
+const chain = RunnableSequence.from([
+  {
+    standalone_question: standaloneQuestionChain,
+    original_input: new RunnablePassthrough(),
+  },
+  {
+    context: retrieverChain,
+    question: ({ original_input }) => original_input.question,
+  },
+  answerChain,
+]);
 
 function App() {
   const [messages, setMessages] = useState<
@@ -77,6 +94,10 @@ function App() {
       const response = await chain.invoke({
         question: input.value,
       });
+      setMessages((messages) => [
+        ...messages,
+        { message: response, role: "ai" },
+      ]);
     }
   };
 
@@ -112,7 +133,10 @@ function App() {
                     )}
                   </Avatar>
                 </ListItemAvatar>
-                <ListItemText primary="You" secondary={m.message} />
+                <ListItemText
+                  primary={m.role === "user" ? "You" : "AI"}
+                  secondary={m.message}
+                />
               </ListItem>
               <Divider variant="inset" component="li" />
             </Fragment>
